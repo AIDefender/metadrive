@@ -3,7 +3,7 @@ from metadrive.engine.logger import get_logger
 from metadrive.manager.base_manager import BaseAgentManager
 from metadrive.policy.AI_protect_policy import AIProtectPolicy
 from metadrive.policy.idm_policy import TrajectoryIDMPolicy
-from metadrive.policy.manual_control_policy import ManualControlPolicy, TakeoverPolicy, TakeoverPolicyWithoutBrake
+from metadrive.policy.manual_control_policy import ManualControlPolicy, TakeoverPolicy, TakeoverPolicyWithoutBrake, PHIPolicy
 from metadrive.policy.replay_policy import ReplayTrafficParticipantPolicy
 
 logger = get_logger()
@@ -45,6 +45,7 @@ class VehicleAgentManager(BaseAgentManager):
             obj = self.spawn_object(v_type, vehicle_config=v_config, name=obj_name)
             ret[agent_id] = obj
             policy_cls = self.agent_policy
+            print("policy cls in agent manager: ", policy_cls)
             args = [obj, self.generate_seed()]
             if policy_cls == TrajectoryIDMPolicy or issubclass(policy_cls, TrajectoryIDMPolicy):
                 args.append(self.engine.map_manager.current_sdc_route)
@@ -63,7 +64,7 @@ class VehicleAgentManager(BaseAgentManager):
         from metadrive.engine.engine_utils import get_global_config
         # Takeover policy shares the control between RL agent (whose action is input via env.step)
         # and external control device (whose action is input via controller).
-        if get_global_config()["agent_policy"] in [TakeoverPolicy, TakeoverPolicyWithoutBrake]:
+        if get_global_config()["agent_policy"] in [TakeoverPolicy, TakeoverPolicyWithoutBrake, PHIPolicy]:
             return get_global_config()["agent_policy"]
         if get_global_config()["manual_control"]:
             if get_global_config().get("use_AI_protector", False):
