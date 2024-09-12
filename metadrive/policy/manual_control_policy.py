@@ -3,6 +3,8 @@ from metadrive.engine.engine_utils import get_global_config
 from metadrive.engine.logger import get_logger
 from metadrive.examples import expert
 from metadrive.policy.env_input_policy import EnvInputPolicy
+import gymnasium as gym
+from metadrive.utils.math import clip
 
 logger = get_logger()
 
@@ -121,7 +123,7 @@ class TakeoverPolicy(EnvInputPolicy):
                                                                       or abs(sum(expert_action)) > 0.01):
                 self.takeover = True
                 return expert_action
-            elif isinstance(self.controller, XboxController) and (self.controller.takeover or self.controller.button_a
+            elif isinstance(self.controller, XboxController) and (self.controller.button_a
                                                                   or self.controller.button_b or
                                                                   self.controller.button_x or self.controller.button_y
                                                                   or abs(sum(expert_action)) > JOYSTICK_DEADZONE):
@@ -142,3 +144,75 @@ class TakeoverPolicyWithoutBrake(TakeoverPolicy):
         if self.takeover and action[1] < 0.0:
             action[1] = 0.0
         return action
+
+# passive human involvement policy
+class PHIPolicy(TakeoverPolicyWithoutBrake):
+
+    extra_input_space = gym.spaces.Discrete(2)
+
+    def __init__(self, obj, seed):
+        """
+        Accept one more argument for creating the input space
+        Args:
+            obj: BaseObject
+            seed: random seed. It is usually filled automatically.
+        """
+        super(PHIPolicy, self).__init__(obj, seed)
+        self.extra_input = None
+
+    def act(self, agent_id):
+        """
+        It retrieves the action from self.engine.external_actions["action"]
+        Args:
+            agent_id: the id of this agent
+
+        Returns: continuous 2-dim action [steering, throttle]
+
+        """
+        print(self.engine.external_actions)
+        action = self.engine.external_actions[agent_id]["action"]
+        self.takeover = self.engine.external_actions[agent_id]["extra"]
+        # if takeover is True, the expert action will be returned
+        if self.takeover:
+            expert_action = self.controller.process_input(self.engine.current_track_agent)
+            # without brake
+            if expert_action[1] < 0.0:
+                expert_action[1] = 0.0
+            return expert_action
+
+        # the following content is the same as EnvInputPolicy
+        if self.engine.global_config["action_check"]:
+            # Do action check for external input in EnvInputPolicy
+            assert self.get_input_space().contains(self.engine.external_actions[agent_id]), \
+                "Input {} is not compatible with action space {}!".format(
+                self.engine.external_actions[agent_id], self.get_input_space()
+            )
+        to_process = self.convert_to_continuous_action(action) if self.discrete_action else action
+
+        # clip to -1, 1
+        action = [clip(to_process[i], -1.0, 1.0) for i in range(len(to_process))]
+        self.action_info["action"] = action
+        return action
+
+    @classmethod
+    def set_extra_input_space(cls, extra_input_space: gym.spaces.space.Space):
+        """
+        Set the space for this extra input. Error will be thrown, if this class property is set already.
+        Args:
+            extra_input_space: gym.spaces.space.Space
+
+        Returns: None
+
+        """
+        assert isinstance(extra_input_space, gym.spaces.space.Space)
+        PHIPolicy.extra_input_space = extra_input_space
+
+    @classmethod
+    def get_input_space(cls):
+        """
+        Define the input space as a Dict Space
+        Returns: Dict action space
+
+        """
+        action_space = super(PHIPolicy, cls).get_input_space()
+        return gym.spaces.Dict({"action": action_space, "extra": cls.extra_input_space})
