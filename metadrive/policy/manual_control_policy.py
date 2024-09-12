@@ -5,6 +5,7 @@ from metadrive.examples import expert
 from metadrive.policy.env_input_policy import EnvInputPolicy
 import gymnasium as gym
 from metadrive.utils.math import clip
+import numpy as np
 
 logger = get_logger()
 
@@ -169,16 +170,22 @@ class PHIPolicy(TakeoverPolicyWithoutBrake):
         Returns: continuous 2-dim action [steering, throttle]
 
         """
-        print(self.engine.external_actions)
-        action = self.engine.external_actions[agent_id]["action"]
-        self.takeover = self.engine.external_actions[agent_id]["extra"]
+        external_action = self.engine.external_actions[agent_id]
+        if isinstance(external_action, dict):
+            action = self.engine.external_actions[agent_id]["action"]
+            self.takeover = self.engine.external_actions[agent_id]["extra"]
+        else:
+            action = external_action
+            self.takeover = False
+            
         # if takeover is True, the expert action will be returned
-        if self.takeover:
+        if self.takeover or np.random.rand() < 0.1:
             expert_action = self.controller.process_input(self.engine.current_track_agent)
             # without brake
             if expert_action[1] < 0.0:
                 expert_action[1] = 0.0
-            return expert_action
+            
+            action = expert_action
 
         # the following content is the same as EnvInputPolicy
         if self.engine.global_config["action_check"]:
@@ -207,12 +214,12 @@ class PHIPolicy(TakeoverPolicyWithoutBrake):
         assert isinstance(extra_input_space, gym.spaces.space.Space)
         PHIPolicy.extra_input_space = extra_input_space
 
-    @classmethod
-    def get_input_space(cls):
-        """
-        Define the input space as a Dict Space
-        Returns: Dict action space
+    # @classmethod
+    # def get_input_space(cls):
+    #     """
+    #     Define the input space as a Dict Space
+    #     Returns: Dict action space
 
-        """
-        action_space = super(PHIPolicy, cls).get_input_space()
-        return gym.spaces.Dict({"action": action_space, "extra": cls.extra_input_space})
+    #     """
+    #     action_space = super(PHIPolicy, cls).get_input_space()
+    #     return gym.spaces.Dict({"action": action_space, "extra": cls.extra_input_space})
