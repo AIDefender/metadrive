@@ -24,13 +24,13 @@ def get_controller(controller_name, pygame_control):
         return KeyboardController(pygame_control=pygame_control)
     elif controller_name in ["xboxController", "xboxcontroller", "xbox", "gamepad", "joystick", "steering_wheel",
                              "wheel"]:
-        try:
-            if controller_name in ["steering_wheel", "wheel"]:
-                return SteeringWheelController()
-            else:
-                return XboxController()
-        except Exception:
-            return None
+        # try:
+        if controller_name in ["steering_wheel", "wheel"]:
+            return SteeringWheelController()
+        else:
+            return XboxController()
+        # except Exception:
+        #     return None
     else:
         raise ValueError("No such a controller type: {}".format(controller_name))
 
