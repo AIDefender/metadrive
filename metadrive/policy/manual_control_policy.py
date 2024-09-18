@@ -6,6 +6,7 @@ from metadrive.policy.env_input_policy import EnvInputPolicy
 import gymnasium as gym
 from metadrive.utils.math import clip
 import numpy as np
+from copy import deepcopy
 
 logger = get_logger()
 
@@ -150,6 +151,10 @@ class TakeoverPolicyWithoutBrake(TakeoverPolicy):
 class PHIPolicy(TakeoverPolicyWithoutBrake):
 
     extra_input_space = gym.spaces.Discrete(2)
+    extra_input = None
+    current_takeover_last_steps = 0
+    takeover_steps = 10
+    previous_takeover = False
 
     def __init__(self, obj, seed):
         """
@@ -160,7 +165,6 @@ class PHIPolicy(TakeoverPolicyWithoutBrake):
         """
         super(PHIPolicy, self).__init__(obj, seed)
         np.random.seed(seed)
-        self.extra_input = None
 
     def act(self, agent_id):
         """
@@ -172,21 +176,31 @@ class PHIPolicy(TakeoverPolicyWithoutBrake):
 
         """
         external_action = self.engine.external_actions[agent_id]
-        if isinstance(external_action, dict):
-            action = self.engine.external_actions[agent_id]["action"]
-            self.takeover = self.engine.external_actions[agent_id]["extra"]
-        else:
-            action = external_action
+        
+        if self.current_takeover_last_steps >= self.takeover_steps:
             self.takeover = False
+            self.current_takeover_last_steps = 0
+        
+        if not self.takeover:
+            if isinstance(external_action, dict):
+                action = self.engine.external_actions[agent_id]["action"]
+                self.takeover = self.engine.external_actions[agent_id]["extra"]
+            else:
+                action = external_action
+                self.takeover = False
+
+            if np.random.rand() < 0.1:
+                self.takeover = True
             
         # if takeover is True, the expert action will be returned
-        if self.takeover or np.random.rand() < 0.1:
+        if self.takeover:
             expert_action = self.controller.process_input(self.engine.current_track_agent)
             # without brake
             if expert_action[1] < 0.0:
                 expert_action[1] = 0.0
             
             action = expert_action
+            self.current_takeover_last_steps += 1
 
         # the following content is the same as EnvInputPolicy
         if self.engine.global_config["action_check"]:
@@ -200,6 +214,8 @@ class PHIPolicy(TakeoverPolicyWithoutBrake):
         # clip to -1, 1
         action = [clip(to_process[i], -1.0, 1.0) for i in range(len(to_process))]
         self.action_info["action"] = action
+        # self.previous_takeover = deepcopy(self.takeover)
+        print("current takeover steps: ", self.current_takeover_last_steps)
         return action
 
     @classmethod
