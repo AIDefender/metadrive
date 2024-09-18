@@ -27,13 +27,13 @@ def get_controller(controller_name, pygame_control):
         return KeyboardController(pygame_control=pygame_control)
     elif controller_name in ["xboxController", "xboxcontroller", "xbox", "gamepad", "joystick", "steering_wheel",
                              "wheel"]:
-        try:
-            if controller_name in ["steering_wheel", "wheel"]:
-                return SteeringWheelController()
-            else:
-                return XboxController()
-        except Exception:
-            return None
+        # try:
+        if controller_name in ["steering_wheel", "wheel"]:
+            return SteeringWheelController()
+        else:
+            return XboxController()
+        # except Exception:
+        #     return None
     else:
         raise ValueError("No such a controller type: {}".format(controller_name))
 
@@ -171,24 +171,21 @@ class PHIPolicy(TakeoverPolicyWithoutBrake):
         Returns: continuous 2-dim action [steering, throttle]
 
         """
-        print("external_actions: ", self.engine.external_actions[agent_id])
-        raw_action = self.engine.external_actions[agent_id]
-        if isinstance(raw_action, dict):
+        external_action = self.engine.external_actions[agent_id]
+        if isinstance(external_action, dict):
             action = self.engine.external_actions[agent_id]["action"]
             self.takeover = self.engine.external_actions[agent_id]["extra"]
         else:
-            action = raw_action
+            action = external_action
             self.takeover = False
             
         # if takeover is True, the expert action will be returned
-        if np.random.rand() < 0.1:
-            self.takeover = True
-            
-        if self.takeover:
+        if self.takeover or np.random.rand() < 0.1:
             expert_action = self.controller.process_input(self.engine.current_track_agent)
             # without brake
             if expert_action[1] < 0.0:
                 expert_action[1] = 0.0
+            
             action = expert_action
 
         # the following content is the same as EnvInputPolicy
